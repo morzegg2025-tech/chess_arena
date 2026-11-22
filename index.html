@@ -1,0 +1,101 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Arena</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+    <header class="header">
+        <div class="logo">♞ CHESS<span>ARENA</span></div>
+        <div class="online">● ONLINE GAME</div>
+    </header>
+
+    <main class="container">
+        <section class="game">
+            <div class="game-heading">
+                <div>
+                    <p class="small-title">YOUR NEXT CHALLENGE</p>
+                    <h1>Chess Arena</h1>
+                </div>
+                <div class="elo">
+                    <span>BOT RATING</span>
+                    <strong id="top-rating">800 ELO</strong>
+                </div>
+            </div>
+
+            <div class="player opponent">
+                <div class="avatar">🤖</div>
+                <div class="player-info">
+                    <strong>Chess Bot</strong>
+                    <span id="bot-level-name">Хороший · 800 ELO</span>
+                </div>
+            </div>
+
+            <div class="board-wrapper">
+                <div id="board" class="board"></div>
+            </div>
+
+            <div class="player you">
+                <div class="avatar">👤</div>
+                <div class="player-info">
+                    <strong>You</strong>
+                    <span id="your-color">White pieces</span>
+                </div>
+            </div>
+
+            <div id="status" class="status">Loading chess...</div>
+            <div id="game-stats" class="game-stats"></div>
+
+            <div class="controls">
+                <button id="undoBtn" class="control-btn">↶ Undo</button>
+                <button id="flipBtn" class="control-btn">⇅ Flip</button>
+                <button id="newBtn" class="control-btn new-btn">＋ New game</button>
+            </div>
+        </section>
+
+        <aside class="sidebar">
+            <div class="side-card">
+                <h2>⚔ Game settings</h2>
+                <label for="side">Choose your side</label>
+                <select id="side">
+                    <option value="w">White</option>
+                    <option value="b">Black</option>
+                </select>
+                <div class="divider"></div>
+                <h3>Game information</h3>
+                <div class="info-row"><span>Difficulty</span><strong id="difficulty-label">800 ELO · Хороший</strong></div>
+                <label for="difficulty" style="display:block;margin-top:16px">Choose bot strength</label>
+                <select id="difficulty">
+                    <option value="100">100 ELO — Слабый</option>
+                    <option value="300">300 ELO — Начинающий</option>
+                    <option value="500">500 ELO — Средний</option>
+                    <option value="800" selected>800 ELO — Хороший</option>
+                    <option value="1200">1200 ELO — Продвинутый</option>
+                    <option value="1500">1500 ELO — Сильный</option>
+                    <option value="2800">2800 ELO — Эксперт (Stockfish)</option>
+                </select>
+                <div class="info-row"><span>Mode</span><strong>Player vs Bot</strong></div>
+                <div class="info-row"><span>Rules</span><strong>Standard Chess</strong></div>
+            </div>
+
+            <div class="side-card">
+                <h2>📜 Move history</h2>
+                <div id="history" class="history">
+                    <p class="empty">Your moves will appear here.</p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <footer>CHESS ARENA © 2026</footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"
+            onerror="document.getElementById('status').textContent='Ошибка: шахматная библиотека не загрузилась. Проверь интернет.'"></script>
+
+    <script src="./script.js"></script>
+</body>
+</html>
