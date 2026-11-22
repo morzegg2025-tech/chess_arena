@@ -327,9 +327,13 @@ function chooseBotMove() {
     moves.sort((a, b) => moveOrderScore(b) - moveOrderScore(a));
 
     const scoredMoves = [];
+    // Если Stockfish недоступен, не запускаем глубокий поиск в главном потоке.
+    // Иначе браузер зависает, особенно на телефонах и на уровне 2800.
+    const fallbackDepth = Number(botLevel) >= 1200 ? 1 : settings.depth;
+
     for (const move of moves) {
         game.move({ from: move.from, to: move.to, promotion: move.promotion || "q" });
-        const score = minimax(settings.depth - 1, -Infinity, Infinity, botColor, 1);
+        const score = minimax(fallbackDepth - 1, -Infinity, Infinity, botColor, 1);
         game.undo();
         scoredMoves.push({ move, score });
     }
@@ -385,7 +389,19 @@ function startStockfish() {
             }
         };
         stockfishWorker.postMessage("uci");
-        stockfishInitTimer = setTimeout(() => { stockfishReady = false; }, 12000);
+        stockfishInitTimer = setTimeout(() => {
+            if (!stockfishReady) {
+                try { stockfishWorker.terminate(); } catch (_) {}
+                stockfishWorker = null;
+                stockfishReady = false;
+                if (stockfishPending) {
+                    const pending = stockfishPending;
+                    stockfishPending = null;
+                    clearTimeout(pending.timer);
+                    pending.resolve(null);
+                }
+            }
+        }, 12000);
     } catch (error) {
         stockfishWorker = null;
         stockfishReady = false;
@@ -441,22 +457,27 @@ function botMove() {
         }
 
         let result = null;
-        // На сильных уровнях сначала используем настоящий шахматный движок.
-        if (Number(botLevel) >= 1200) {
-            const uci = await stockfishMove();
-            if (thisGame !== gameGeneration) return;
-            if (uci) result = applyUciMove(uci);
-        }
-        // Резервный алгоритм: работает даже без интернета или если движок не загрузился.
-        if (!result) {
-            const move = chooseBotMove();
-            if (move) result = game.move({
-                from: move.from,
-                to: move.to,
-                promotion: move.promotion || "q"
-            });
+        try {
+            // На сильных уровнях сначала используем настоящий шахматный движок в Worker.
+            if (Number(botLevel) >= 1200) {
+                const uci = await stockfishMove();
+                if (thisGame !== gameGeneration) return;
+                if (uci) result = applyUciMove(uci);
+            }
+            // Если движок не загрузился, используется облегчённый поиск без зависания вкладки.
+            if (!result) {
+                const move = chooseBotMove();
+                if (move) result = game.move({
+                    from: move.from,
+                    to: move.to,
+                    promotion: move.promotion || "q"
+                });
+            }
+        } catch (error) {
+            console.error("Bot move error:", error);
         }
 
+        if (thisGame !== gameGeneration) return;
         if (result) lastMove = result;
         botThinking = false;
         selected = null;
