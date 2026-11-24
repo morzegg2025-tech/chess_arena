@@ -8,13 +8,27 @@
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+    <section id="mainMenu" class="main-menu">
+        <div class="menu-brand">♞ CHESS<span>ARENA</span></div>
+        <p class="menu-kicker">ТВОЯ ШАХМАТНАЯ ПЛОЩАДКА</p>
+        <h1>Выбери режим игры</h1>
+        <div class="menu-grid">
+            <button class="menu-card" data-menu="bot"><span>🤖</span><b>Играть с ботом</b><small>Тренируйся против компьютера</small></button>
+            <button class="menu-card" data-menu="friend"><span>♟️</span><b>Играть с другом</b><small>Два игрока на одном устройстве</small></button>
+            <button class="menu-card" data-menu="puzzles"><span>🧩</span><b>Задачи</b><small>Мат и тактические приёмы</small></button>
+            <button class="menu-card" data-menu="editor"><span>♜</span><b>Редактор доски</b><small>Создавай и сохраняй позиции</small></button>
+            <button class="menu-card" data-menu="openings"><span>📚</span><b>Дебюты</b><small>Изучай первые ходы</small></button>
+            <button class="menu-card" data-menu="settings"><span>⚙️</span><b>Настройки</b><small>Цвета и параметры игры</small></button>
+        </div>
+        <p class="menu-foot">CHESS ARENA · PLAY · LEARN · IMPROVE</p>
+    </section>
 
     <header class="header">
-        <div class="logo">♞ CHESS<span>ARENA</span></div>
+        <button id="homeBtn" class="logo logo-button">♞ CHESS<span>ARENA</span></button>
         <div class="online">● ONLINE GAME</div>
     </header>
 
-    <main class="container">
+    <main id="gameApp" class="container hidden">
         <section class="game">
             <div class="game-heading">
                 <div>
@@ -27,6 +41,10 @@
                 </div>
             </div>
 
+            <div id="puzzleBanner" class="puzzle-banner hidden">
+                <div><b id="puzzleTitle">Мат в 1 ход</b><p id="puzzleHint">Найди лучший ход белых</p></div>
+                <button id="puzzleBack" class="control-btn">← К задачам</button>
+            </div>
             <div class="player opponent">
                 <div class="avatar">🤖</div>
                 <div class="player-info">
@@ -48,7 +66,6 @@
             </div>
 
             <div id="status" class="status">Loading chess...</div>
-            <div id="game-stats" class="game-stats"></div>
 
             <div class="controls">
                 <button id="undoBtn" class="control-btn">↶ Undo</button>
@@ -60,6 +77,12 @@
         <aside class="sidebar">
             <div class="side-card">
                 <h2>⚔ Game settings</h2>
+                <label for="mode">Режим игры</label>
+                <select id="mode">
+                    <option value="bot">Против бота</option>
+                    <option value="local">С другом на одном устройстве</option>
+                </select>
+                <div class="divider"></div>
                 <label for="side">Choose your side</label>
                 <select id="side">
                     <option value="w">White</option>
@@ -75,10 +98,35 @@
                     <option value="500">500 ELO — Средний</option>
                     <option value="800" selected>800 ELO — Хороший</option>
                     <option value="1200">1200 ELO — Продвинутый</option>
-                    <option value="1500">1500 ELO — Сильный</option>
-                    <option value="2800">2800 ELO — Эксперт (Stockfish)</option>
+                    <option value="1300">1300 ELO — Сильный</option>
                 </select>
-                <div class="info-row"><span>Mode</span><strong>Player vs Bot</strong></div>
+                <div class="info-row"><span>Mode</span><strong id="mode-label">Против бота</strong></div>
+                <label for="theme" style="display:block;margin-top:16px">Цвет доски</label>
+                <select id="theme">
+                    <option value="classic">Классическая</option>
+                    <option value="blue">Синяя</option>
+                    <option value="dark">Тёмная</option>
+                </select>
+                <div class="divider"></div>
+                <h3>Инструменты</h3>
+                <div class="tool-row">
+                    <button id="editBtn" class="control-btn">✎ Редактор</button>
+                    <button id="clearArrowsBtn" class="control-btn">Очистить стрелки</button>
+                </div>
+                <label for="editorPiece" style="display:block;margin-top:12px">Фигура для редактора</label>
+                <select id="editorPiece">
+                    <option value="wP">Белая пешка</option><option value="wN">Белый конь</option>
+                    <option value="wB">Белый слон</option><option value="wR">Белая ладья</option>
+                    <option value="wQ">Белый ферзь</option><option value="wK">Белый король</option>
+                    <option value="bP">Чёрная пешка</option><option value="bN">Чёрный конь</option>
+                    <option value="bB">Чёрный слон</option><option value="bR">Чёрная ладья</option>
+                    <option value="bQ">Чёрный ферзь</option><option value="bK">Чёрный король</option>
+                    <option value="remove">Удалить фигуру</option>
+                </select>
+                <div class="tool-row">
+                    <button id="backBtn" class="control-btn">◀ Назад</button>
+                    <button id="forwardBtn" class="control-btn">Вперёд ▶</button>
+                </div>
                 <div class="info-row"><span>Rules</span><strong>Standard Chess</strong></div>
             </div>
 
@@ -91,6 +139,53 @@
         </aside>
     </main>
 
+    <section id="puzzleHub" class="content-screen hidden">
+        <button class="control-btn back-home">← Главное меню</button>
+        <p class="small-title">ТРЕНИРУЙ ТАКТИКУ</p><h1>Шахматные задачи</h1>
+        <div class="task-grid">
+            <button class="task-card" data-puzzle="mate1"><b>♔ Мат в 1 ход</b><small>Найди решающий ход</small><span>Начать →</span></button>
+            <button class="task-card" data-puzzle="mate2"><b>♔ Мат в 2 хода</b><small>Планируй комбинацию заранее</small><span>Скоро</span></button>
+            <button class="task-card" data-puzzle="mate3"><b>♔ Мат в 3 хода</b><small>Рассчитывай варианты</small><span>Скоро</span></button>
+            <button class="task-card" data-puzzle="attraction"><b>🧲 Завлечение</b><small>Заставь фигуру соперника уйти</small><span>Скоро</span></button>
+            <button class="task-card" data-puzzle="deflection"><b>↗ Отвлечение</b><small>Отвлеки защитника</small><span>Скоро</span></button>
+            <button class="task-card" data-puzzle="pin"><b>📌 Связка</b><small>Используй связанную фигуру</small><span>Скоро</span></button>
+        </div>
+        <p class="screen-note">Сейчас доступна первая интерактивная задача. Остальные разделы показаны отдельно и будут наполняться проверенными позициями.</p>
+    </section>
+    <section id="openingHub" class="content-screen hidden">
+        <button class="control-btn back-home">← Главное меню</button><p class="small-title">БИБЛИОТЕКА</p><h1>Дебюты</h1>
+        <div class="task-grid">
+            <button class="task-card opening-card" data-opening="e4 e5 Nf3 Nc6 Bb5"><b>Испанская партия</b><small>1. e4 e5 2. Nf3 Nc6 3. Bb5</small><span>Открыть →</span></button>
+            <button class="task-card opening-card" data-opening="e4 c5"><b>Сицилианская защита</b><small>1. e4 c5</small><span>Открыть →</span></button>
+            <button class="task-card opening-card" data-opening="d4 d5 c4"><b>Ферзевый гамбит</b><small>1. d4 d5 2. c4</small><span>Открыть →</span></button>
+        </div>
+    </section>
+
+    <div id="resultModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <div class="modal-card result-card">
+            <h2 id="resultTitle">🏁 Итоги партии</h2>
+            <p id="resultSummary">Партия завершена</p>
+            <div id="game-stats" class="game-stats"></div>
+            <div class="result-actions">
+                <button id="resultClose" class="control-btn">Закрыть</button>
+                <button id="resultNewGame" class="control-btn new-btn">Новая партия</button>
+                <button id="resultHome" class="control-btn">Главное меню</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="promotionModal" class="modal hidden">
+        <div class="modal-card">
+            <h2>Превращение пешки</h2>
+            <p>Выбери фигуру:</p>
+            <div class="promotion-options">
+                <button data-promotion="q">♕ Ферзь</button>
+                <button data-promotion="r">♖ Ладья</button>
+                <button data-promotion="b">♗ Слон</button>
+                <button data-promotion="n">♘ Конь</button>
+            </div>
+        </div>
+    </div>
     <footer>CHESS ARENA © 2026</footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"

@@ -36,6 +36,143 @@ if (typeof window.Chess !== "function") {
 
 const game = new Chess();
 
+/* Chess Arena additions: local mode, replay, editor, arrows, promotion and themes. */
+let gameMode = "bot";
+let puzzleMode = false;
+let editorMode = false;
+let replayPositions = [game.fen()];
+let replayIndex = 0;
+let replaying = false;
+let pendingPromotion = null;
+let drawnArrows = [];
+let arrowStart = null;
+const modeSelect = document.getElementById("mode");
+const modeLabel = document.getElementById("mode-label");
+const themeSelect = document.getElementById("theme");
+const editBtn = document.getElementById("editBtn");
+const editorPiece = document.getElementById("editorPiece");
+let editorChoice = editorPiece ? editorPiece.value : "wP";
+if (editorPiece) editorPiece.addEventListener("change", () => { editorChoice = editorPiece.value; });
+const backBtn = document.getElementById("backBtn");
+const forwardBtn = document.getElementById("forwardBtn");
+const promotionModal = document.getElementById("promotionModal");
+
+function rememberPosition() {
+    const fen = game.fen();
+    if (replayPositions[replayPositions.length - 1] !== fen) {
+        replayPositions = replayPositions.slice(0, replayIndex + 1);
+        replayPositions.push(fen);
+        replayIndex = replayPositions.length - 1;
+    }
+}
+function setReplayPosition(index) {
+    if (index < 0 || index >= replayPositions.length) return;
+    replayIndex = index;
+    replaying = index < replayPositions.length - 1;
+    game.load(replayPositions[index]);
+    selected = null; legalMoves = []; lastMove = null;
+    const verbose = game.history({verbose:true});
+    if (verbose.length) lastMove = verbose[verbose.length - 1];
+    renderBoard(); updateHistory();
+    statusBox.textContent = "Просмотр партии: ход " + index + " из " + (replayPositions.length - 1);
+}
+function choosePromotion(color) {
+    return new Promise(resolve => {
+        pendingPromotion = resolve;
+        promotionModal.classList.remove("hidden");
+        promotionModal.dataset.color = color;
+    });
+}
+document.querySelectorAll("[data-promotion]").forEach(button => {
+    button.addEventListener("click", () => {
+        promotionModal.classList.add("hidden");
+        if (pendingPromotion) pendingPromotion(button.dataset.promotion);
+        pendingPromotion = null;
+    });
+});
+function applyTheme(theme) {
+    document.body.dataset.boardTheme = theme;
+}
+if (themeSelect) themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
+if (modeSelect) modeSelect.addEventListener("change", () => {
+    gameMode = modeSelect.value;
+    if (modeLabel) modeLabel.textContent = gameMode === "local" ? "Два игрока на одном устройстве" : "Против бота";
+    if (difficultySelect) difficultySelect.disabled = gameMode === "local";
+    if (sideSelect) sideSelect.disabled = gameMode === "local";
+    newGame();
+});
+if (editBtn) editBtn.addEventListener("click", () => {
+    editorMode = !editorMode;
+    editBtn.classList.toggle("active-tool", editorMode);
+    statusBox.textContent = editorMode ? "Редактор включён: выбери фигуру и нажми на клетку. Для выхода нажми «Редактор»." : "Редактор выключен.";
+});
+if (backBtn) backBtn.addEventListener("click", () => setReplayPosition(replayIndex - 1));
+if (forwardBtn) forwardBtn.addEventListener("click", () => setReplayPosition(replayIndex + 1));
+const clearArrowsBtn = document.getElementById("clearArrowsBtn");
+if (clearArrowsBtn) clearArrowsBtn.addEventListener("click", () => { drawnArrows = []; drawArrowOverlay(); });
+function drawArrowOverlay() {
+    let svg = document.getElementById("arrowOverlay");
+    if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+        svg.id = "arrowOverlay"; svg.setAttribute("viewBox","0 0 800 800");
+        svg.setAttribute("preserveAspectRatio","none");
+        document.querySelector(".board-wrapper").appendChild(svg);
+    }
+    svg.innerHTML = drawnArrows.map(a => {
+        const x1=(a.from.charCodeAt(0)-97)*100+50, y1=(8-Number(a.from[1]))*100+50;
+        const x2=(a.to.charCodeAt(0)-97)*100+50, y2=(8-Number(a.to[1]))*100+50;
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#f2c94c" stroke-width="13" stroke-linecap="round" opacity=".85" marker-end="url(#arrowHead)"/>`;
+    }).join("");
+    svg.insertAdjacentHTML("afterbegin",'<defs><marker id="arrowHead" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f2c94c"/></marker></defs>');
+}
+function squareAtPoint(x,y) {
+    const el = document.elementFromPoint(x,y);
+    const cell = el && el.closest ? el.closest(".square") : null;
+    return cell ? cell.dataset.square : null;
+}
+let editorPainting = false;
+let lastEditorPaintSquare = null;
+function paintEditorSquare(square) {
+    if (!editorMode || !square || square === lastEditorPaintSquare) return;
+    lastEditorPaintSquare = square;
+    const choice = editorChoice;
+    if (choice === "remove") game.remove(square);
+    else game.put({ type: choice[1].toLowerCase(), color: choice[0] }, square);
+    rememberPosition();
+    renderBoard();
+}
+board.addEventListener("pointerdown", e => {
+    if (!editorMode || e.button !== 0) return;
+    const cell = e.target.closest(".square");
+    if (!cell) return;
+    editorPainting = true;
+    lastEditorPaintSquare = null;
+    paintEditorSquare(cell.dataset.square);
+});
+// Track the pointer on document: renderBoard replaces square elements while painting.
+document.addEventListener("pointermove", e => {
+    if (!editorPainting || !editorMode || !(e.buttons & 1)) return;
+    const square = squareAtPoint(e.clientX, e.clientY);
+    if (square) paintEditorSquare(square);
+});
+document.addEventListener("pointerup", () => { editorPainting = false; lastEditorPaintSquare = null; });
+
+const boardWrapper = document.querySelector(".board-wrapper");
+if (boardWrapper) {
+    boardWrapper.addEventListener("contextmenu", e => e.preventDefault());
+    boardWrapper.addEventListener("pointerdown", e => {
+        if (e.button !== 2) return;
+        arrowStart = squareAtPoint(e.clientX,e.clientY);
+    });
+    boardWrapper.addEventListener("pointerup", e => {
+        if (!arrowStart) return;
+        const end = squareAtPoint(e.clientX,e.clientY);
+        if (end && end !== arrowStart) { drawnArrows.push({from:arrowStart,to:end}); drawArrowOverlay(); }
+        arrowStart = null;
+    });
+}
+
+
 const symbols = {
     K: "♔", Q: "♕", R: "♖", B: "♗",
     N: "♘", P: "♙",
@@ -59,9 +196,8 @@ const difficultySettings = {
     "300":  { name: "Начинающий", depth: 1, randomTop: 5, mistakeChance: 0.30, elo: 300, time: 200 },
     "500":  { name: "Средний", depth: 2, randomTop: 3, mistakeChance: 0.16, elo: 500, time: 300 },
     "800":  { name: "Хороший", depth: 2, randomTop: 2, mistakeChance: 0.07, elo: 800, time: 450 },
-    "1200": { name: "Продвинутый", depth: 3, randomTop: 1, mistakeChance: 0.00, elo: 1200, time: 700 },
-    "1500": { name: "Сильный", depth: 4, randomTop: 1, mistakeChance: 0.00, elo: 1500, time: 1200 },
-    "2800": { name: "Эксперт · Stockfish", depth: 5, randomTop: 1, mistakeChance: 0.00, elo: 2800, time: 900 }
+    "1200": { name: "Продвинутый", depth: 3, randomTop: 1, mistakeChance: 0.00, elo: 1200, time: 1800 },
+    "1300": { name: "Сильный · Stockfish", depth: 4, randomTop: 1, mistakeChance: 0.00, elo: 1300, time: 3500 }
 };
 
 let botLevel = difficultySelect.value || "800";
@@ -77,6 +213,9 @@ let botThinking = false;
 let gameGeneration = 0;
 
 function renderBoard() {
+    // В локальной игре нижняя сторона принадлежит игроку, чей сейчас ход.
+    // В редакторе ориентация не должна самопроизвольно переключаться.
+    if (gameMode === "local" && !editorMode) flipped = game.turn() === "b";
     board.innerHTML = "";
 
     const files = flipped
@@ -144,8 +283,15 @@ function renderBoard() {
 }
 
 function handleClick(square) {
+    if (replaying) return;
+    if (editorMode) {
+        const choice = editorChoice;
+        if (choice === "remove") game.remove(square);
+        else game.put({type: choice[1].toLowerCase(), color: choice[0]}, square);
+        rememberPosition(); renderBoard(); updateHistory(); return;
+    }
     if (game.game_over() || botThinking ||
-        game.turn() !== playerColor) {
+        (gameMode === "bot" && game.turn() !== playerColor)) {
         return;
     }
 
@@ -160,7 +306,8 @@ function handleClick(square) {
         }
     }
 
-    if (piece && piece.color === playerColor) {
+    const selectableColor = gameMode === "local" ? game.turn() : playerColor;
+    if (piece && piece.color === selectableColor) {
         selected = square;
         legalMoves = game.moves({
             square: square,
@@ -190,36 +337,62 @@ function gradePlayerMove(move) {
 function renderGameStats(final = false) {
     const counts = { "Хороший": 0, "Зевок": 0, "Бриллиантовый": 0 };
     moveGrades.forEach(item => counts[item.grade]++);
+    const modal = document.getElementById("resultModal");
+    const summary = document.getElementById("resultSummary");
     statsBox.innerHTML = `
-      <div class="stats-title">${final ? "🏁 Итоги партии" : "📊 Твоя статистика"}</div>
       <div class="stats-grid">
+        <div class="stat-item"><strong>${game.history().length}</strong><span>Всего ходов</span></div>
         <div class="stat-item good"><strong>${counts["Хороший"]}</strong><span>Хороших</span></div>
         <div class="stat-item blunder"><strong>${counts["Зевок"]}</strong><span>Зевков</span></div>
         <div class="stat-item brilliant"><strong>${counts["Бриллиантовый"]}</strong><span>Бриллиантовых</span></div>
       </div>
-      <div class="stats-note">Оценка приблизительная, не как у Stockfish.</div>`;
+      <div class="stats-note">Классификация ходов приблизительная и пока не является полноценной оценкой Stockfish.</div>`;
     statsBox.classList.toggle("final-stats", final);
+    if (final && modal) {
+        let result = "Партия завершена";
+        if (game.in_checkmate()) {
+            result = gameMode === "local"
+                ? (game.turn() === "w" ? "Победили чёрные! Мат." : "Победили белые! Мат.")
+                : (game.turn() === playerColor ? "Победил бот! Мат." : "Ты победил! Мат.");
+        } else if (game.in_stalemate()) result = "Ничья — пат.";
+        else if (game.in_draw()) result = "Ничья.";
+        if (summary) summary.textContent = result;
+        modal.classList.remove("hidden");
+    } else if (modal) {
+        modal.classList.add("hidden");
+    }
 }
 
-function makePlayerMove(move) {
+async function makePlayerMove(move) {
     try {
+        let promotion = "q";
+        const movingColor = game.turn();
+        if (move.promotion) promotion = await choosePromotion(movingColor);
         const result = game.move({
             from: move.from,
             to: move.to,
-            promotion: "q"
+            promotion
         });
 
         if (!result) return;
+        if (puzzleMode && result.san !== "Qg7#") {
+            game.undo();
+            statusBox.textContent = "Не совсем! Попробуй найти матующий ход.";
+            selected = null; legalMoves = []; renderBoard();
+            return;
+        }
 
         lastMove = result;
+        replaying = false; rememberPosition();
         gradePlayerMove(result);
         selected = null;
         legalMoves = [];
 
         renderBoard();
         updateGame();
+        if (puzzleMode && game.in_checkmate()) statusBox.textContent = "🏆 Верно! Это мат. Задача решена!";
 
-        if (!game.game_over()) {
+        if (!game.game_over() && gameMode === "bot") {
             botMove();
         }
     } catch (error) {
@@ -329,7 +502,7 @@ function chooseBotMove() {
     const scoredMoves = [];
     // Если Stockfish недоступен, не запускаем глубокий поиск в главном потоке.
     // Иначе браузер зависает, особенно на телефонах и на уровне 2800.
-    const fallbackDepth = Number(botLevel) >= 1200 ? 1 : settings.depth;
+    const fallbackDepth = Number(botLevel) >= 1200 ? 2 : settings.depth;
 
     for (const move of moves) {
         game.move({ from: move.from, to: move.to, promotion: move.promotion || "q" });
@@ -354,10 +527,23 @@ let stockfishWorker = null;
 let stockfishReady = false;
 let stockfishPending = null;
 let stockfishInitTimer = null;
-const STOCKFISH_URL = "https://cdn.jsdelivr.net/npm/stockfish@17.1.0/bin/stockfish-17.1-lite-single-03e3232.js";
+let stockfishInitPromise = null;
+let resolveStockfishInit = null;
+const STOCKFISH_JS = "./stockfish-17.1-lite-single-03e3232.js";
+// JS и соответствующий WASM лежат в одной папке пакета; Worker подхватывает WASM оттуда.
+const STOCKFISH_URL = STOCKFISH_JS;
+
+function finishStockfishInit(ok) {
+    if (resolveStockfishInit) {
+        const resolve = resolveStockfishInit;
+        resolveStockfishInit = null;
+        resolve(ok);
+    }
+}
 
 function startStockfish() {
     if (stockfishWorker) return;
+    stockfishInitPromise = new Promise(resolve => { resolveStockfishInit = resolve; });
     try {
         stockfishWorker = new Worker(STOCKFISH_URL);
         stockfishWorker.onmessage = event => {
@@ -369,6 +555,7 @@ function startStockfish() {
             } else if (line === "readyok") {
                 stockfishReady = true;
                 clearTimeout(stockfishInitTimer);
+                finishStockfishInit(true);
             } else if (line.startsWith("bestmove ") && stockfishPending) {
                 const pending = stockfishPending;
                 stockfishPending = null;
@@ -381,6 +568,7 @@ function startStockfish() {
             stockfishReady = false;
             try { stockfishWorker.terminate(); } catch (_) {}
             stockfishWorker = null;
+            finishStockfishInit(false);
             if (stockfishPending) {
                 const pending = stockfishPending;
                 stockfishPending = null;
@@ -394,6 +582,7 @@ function startStockfish() {
                 try { stockfishWorker.terminate(); } catch (_) {}
                 stockfishWorker = null;
                 stockfishReady = false;
+                finishStockfishInit(false);
                 if (stockfishPending) {
                     const pending = stockfishPending;
                     stockfishPending = null;
@@ -405,30 +594,44 @@ function startStockfish() {
     } catch (error) {
         stockfishWorker = null;
         stockfishReady = false;
+        finishStockfishInit(false);
     }
 }
 
-function stockfishMove() {
+async function stockfishMove() {
+    // Если игрок сделал первый ход раньше завершения загрузки движка,
+    // ждём готовности вместо немедленного перехода к слабому запасному боту.
+    if (!stockfishWorker) return null;
+    if (!stockfishReady && stockfishInitPromise) {
+        const ready = await stockfishInitPromise;
+        if (!ready) return null;
+    }
+    if (!stockfishWorker || !stockfishReady || stockfishPending) return null;
+
     return new Promise(resolve => {
-        if (!stockfishWorker || !stockfishReady || stockfishPending) {
-            resolve(null);
-            return;
-        }
         const settings = difficultySettings[botLevel] || difficultySettings["800"];
         const elo = settings.elo;
-        stockfishWorker.postMessage("setoption name UCI_LimitStrength value true");
-        stockfishWorker.postMessage("setoption name UCI_Elo value " + elo);
-        stockfishWorker.postMessage("setoption name Skill Level value " + (elo >= 2800 ? 20 : Math.max(0, Math.min(20, Math.round(elo / 140)))));
-        stockfishWorker.postMessage("position fen " + game.fen());
-        stockfishPending = {
-            resolve,
-            timer: setTimeout(() => {
-                if (!stockfishPending) return;
+        try {
+            stockfishWorker.postMessage("setoption name UCI_LimitStrength value true");
+            stockfishWorker.postMessage("setoption name UCI_Elo value " + elo);
+            stockfishWorker.postMessage("setoption name Skill Level value " + (elo >= 2800 ? 20 : Math.max(0, Math.min(20, Math.round(elo / 140)))));
+            stockfishWorker.postMessage("position fen " + game.fen());
+            stockfishPending = {
+                resolve,
+                timer: setTimeout(() => {
+                    if (!stockfishPending) return;
+                    stockfishPending = null;
+                    resolve(null);
+                }, settings.time + 5000)
+            };
+            stockfishWorker.postMessage("go movetime " + settings.time);
+        } catch (error) {
+            if (stockfishPending) {
+                clearTimeout(stockfishPending.timer);
                 stockfishPending = null;
-                resolve(null);
-            }, settings.time + 2500)
-        };
-        stockfishWorker.postMessage("go movetime " + settings.time);
+            }
+            resolve(null);
+        }
     });
 }
 
@@ -465,7 +668,10 @@ function botMove() {
                 if (uci) result = applyUciMove(uci);
             }
             // Если движок не загрузился, используется облегчённый поиск без зависания вкладки.
-            if (!result) {
+            if (!result && Number(botLevel) >= 1200) {
+                statusBox.textContent = "Stockfish не загрузился. Проверь, что JS и WASM движка лежат рядом с index.html.";
+                console.error("Stockfish unavailable: refusing to pretend this is a strong level.");
+            } else if (!result) {
                 const move = chooseBotMove();
                 if (move) result = game.move({
                     from: move.from,
@@ -478,7 +684,7 @@ function botMove() {
         }
 
         if (thisGame !== gameGeneration) return;
-        if (result) lastMove = result;
+        if (result) { lastMove = result; rememberPosition(); }
         botThinking = false;
         selected = null;
         legalMoves = [];
@@ -491,10 +697,9 @@ function updateGame() {
     updateHistory();
 
     if (game.in_checkmate()) {
-        statusBox.textContent =
-            game.turn() === playerColor
-                ? "☠ Мат! Победил бот!"
-                : "🏆 Мат! Ты победил!";
+        statusBox.textContent = gameMode === "local"
+            ? (game.turn() === "w" ? "🏆 Мат! Победили чёрные!" : "🏆 Мат! Победили белые!")
+            : (game.turn() === playerColor ? "☠ Мат! Победил бот!" : "🏆 Мат! Ты победил!");
     } else if (game.in_stalemate()) {
         statusBox.textContent = "Ничья: пат.";
     } else if (game.in_draw()) {
@@ -502,10 +707,9 @@ function updateGame() {
     } else if (game.in_check()) {
         statusBox.textContent = "⚠ Шах!";
     } else {
-        statusBox.textContent =
-            game.turn() === playerColor
-                ? "♟ Твой ход!"
-                : "🤖 Ход бота...";
+        statusBox.textContent = gameMode === "local"
+            ? (game.turn() === "w" ? "♙ Ход белых" : "♟ Ход чёрных")
+            : (game.turn() === playerColor ? "♟ Твой ход!" : "🤖 Ход бота...");
     }
     renderGameStats(game.game_over());
 }
@@ -541,6 +745,8 @@ function newGame() {
     botThinking = false;
 
     game.reset();
+    replayPositions = [game.fen()]; replayIndex = 0; replaying = false;
+    drawnArrows = []; drawArrowOverlay();
     moveGrades = [];
     renderGameStats(false);
 
@@ -562,7 +768,7 @@ function newGame() {
     updateGame();
 
     // Если игрок выбрал чёрные фигуры, первым ходит бот белыми.
-    if (playerColor === "b") {
+    if (playerColor === "b" && gameMode === "bot") {
         botMove();
     }
 }
@@ -580,10 +786,11 @@ undoBtn.addEventListener("click", () => {
     game.undo();
 
     // Если бот уже ответил, отменяем также ход игрока.
-    if (game.turn() !== playerColor && game.history().length > 0) {
+    if (gameMode === "bot" && game.turn() !== playerColor && game.history().length > 0) {
         game.undo();
     }
     if (moveGrades.length > 0) moveGrades.pop();
+    replayPositions = [game.fen()]; replayIndex = 0; replaying = false;
     renderGameStats(game.game_over());
 
     selected = null;
@@ -614,6 +821,78 @@ difficultySelect.addEventListener("change", () => {
     // Новый уровень применяется со следующего хода бота.
 });
 
-// Запуск движка и игры.
+// Главное меню и отдельные разделы
+const mainMenu = document.getElementById("mainMenu");
+const gameApp = document.getElementById("gameApp");
+const puzzleHub = document.getElementById("puzzleHub");
+const openingHub = document.getElementById("openingHub");
+const puzzleBanner = document.getElementById("puzzleBanner");
+function showScreen(screen) {
+    mainMenu.classList.toggle("hidden", screen !== "menu");
+    gameApp.classList.toggle("hidden", screen !== "game");
+    puzzleHub.classList.toggle("hidden", screen !== "puzzles");
+    openingHub.classList.toggle("hidden", screen !== "openings");
+}
+function enterGame(mode) {
+    puzzleMode = false;
+    if (puzzleBanner) puzzleBanner.classList.add("hidden");
+    gameMode = mode;
+    if (modeSelect) modeSelect.value = mode === "local" ? "local" : "bot";
+    if (modeLabel) modeLabel.textContent = mode === "local" ? "Два игрока на одном устройстве" : "Против бота";
+    if (difficultySelect) difficultySelect.disabled = mode === "local";
+    if (sideSelect) sideSelect.disabled = mode === "local";
+    playerColor = sideSelect ? sideSelect.value : "w";
+    showScreen("game");
+    newGame();
+}
+document.querySelectorAll("[data-menu]").forEach(button => button.addEventListener("click", () => {
+    const target = button.dataset.menu;
+    if (target === "bot") return enterGame("bot");
+    if (target === "friend") return enterGame("local");
+    if (target === "puzzles") { showScreen("puzzles"); return; }
+    if (target === "openings") { showScreen("openings"); return; }
+    if (target === "editor") { enterGame("local"); editorMode = true; if (editBtn) editBtn.classList.add("active-tool"); statusBox.textContent = "Редактор включён: выбери фигуру и нажимай или проводи мышью по клеткам."; return; }
+    if (target === "settings") { enterGame("bot"); document.getElementById("theme").scrollIntoView({behavior:"smooth",block:"center"}); }
+}));
+document.getElementById("homeBtn").addEventListener("click", () => { puzzleMode = false; editorMode = false; showScreen("menu"); });
+document.querySelectorAll(".back-home").forEach(button => button.addEventListener("click", () => showScreen("menu")));
+document.querySelectorAll("[data-puzzle]").forEach(button => button.addEventListener("click", () => {
+    if (button.dataset.puzzle !== "mate1") return;
+    puzzleMode = true; gameMode = "puzzle"; playerColor = "w"; flipped = false;
+    game.load("7k/8/5KQ1/8/8/8/8/8 w - - 0 1");
+    replayPositions = [game.fen()]; replayIndex = 0; replaying = false;
+    selected = null; legalMoves = []; lastMove = null; drawnArrows = []; moveGrades = [];
+    showScreen("game");
+    if (puzzleBanner) puzzleBanner.classList.remove("hidden");
+    document.getElementById("puzzleTitle").textContent = "Мат в 1 ход";
+    document.getElementById("puzzleHint").textContent = "Белые ходят. Найди Qg7#";
+    statusBox.textContent = "Найди мат одним ходом.";
+    renderBoard(); updateHistory(); renderGameStats(false);
+}));
+document.getElementById("puzzleBack").addEventListener("click", () => { puzzleMode = false; showScreen("puzzles"); });
+document.querySelectorAll("[data-opening]").forEach(button => button.addEventListener("click", () => {
+    enterGame("local"); game.reset();
+    const sans = button.dataset.opening.split(/\s+/); let played = [];
+    for (const san of sans) { const m = game.move(san); if (!m) break; played.push(m.san); }
+    replayPositions = [new Chess().fen()];
+    const temp = new Chess();
+    for (const san of played) { temp.move(san); replayPositions.push(temp.fen()); }
+    replayIndex = replayPositions.length - 1; replaying = true;
+    selected = null; legalMoves = []; lastMove = game.history({verbose:true}).slice(-1)[0] || null;
+    renderBoard(); updateHistory(); statusBox.textContent = "Дебют загружен: " + button.querySelector("b").textContent;
+}));
+
+
+// Окно итогов показывается только после завершения партии.
+const resultModal = document.getElementById("resultModal");
+const resultClose = document.getElementById("resultClose");
+const resultNewGame = document.getElementById("resultNewGame");
+const resultHome = document.getElementById("resultHome");
+if (resultClose) resultClose.addEventListener("click", () => resultModal.classList.add("hidden"));
+if (resultNewGame) resultNewGame.addEventListener("click", () => { resultModal.classList.add("hidden"); newGame(); });
+if (resultHome) resultHome.addEventListener("click", () => { resultModal.classList.add("hidden"); puzzleMode = false; editorMode = false; showScreen("menu"); });
+
+// Запуск движка и партии; посетитель сначала видит главное меню.
 startStockfish();
 newGame();
+showScreen("menu");
